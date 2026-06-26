@@ -13,15 +13,26 @@ static const uint8_t REG_SENSOR_CONFIG = 0x05;
 void MCP9600NoIdComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up MCP9600 (no device ID check)...");
 
-  // Write thermocouple type to sensor config register (bits 6:4)
+  // Some MCP9600 chips need time after power-on before accepting writes
+  delay(100);
+
   uint8_t config = static_cast<uint8_t>(this->thermocouple_type_) << 4;
   if (!this->write_byte(REG_SENSOR_CONFIG, config)) {
-    ESP_LOGE(TAG, "Failed to write sensor config — check I2C wiring");
+    // Don't mark failed — chip defaults to K-type anyway and reads may still work
+    ESP_LOGW(TAG, "Config register write failed (chip may still work with defaults)");
+  } else {
+    ESP_LOGI(TAG, "MCP9600 configured OK (device ID check skipped)");
+  }
+
+  // Verify we can actually read from the chip
+  uint8_t data[2];
+  if (this->read_register(REG_HOT_JUNCTION, data, 2) != i2c::ERROR_OK) {
+    ESP_LOGE(TAG, "Cannot read from MCP9600 - check wiring");
     this->mark_failed();
     return;
   }
 
-  ESP_LOGI(TAG, "MCP9600 configured OK (device ID check skipped)");
+  ESP_LOGI(TAG, "MCP9600 read test passed");
 }
 
 void MCP9600NoIdComponent::update() {
